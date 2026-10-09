@@ -10,6 +10,7 @@ import dev.alloy.agent.weave.WeaveChainLoader;
 import dev.alloy.bridge.GameHooks;
 import dev.alloy.hooks.GameClassTransformer;
 import dev.alloy.hooks.HookCatalog;
+import dev.alloy.remap.io.UserFolders;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
@@ -68,9 +69,13 @@ public final class AlloyAgent {
             this.installForgeSupport(home, config, log, launch);
         }
 
-        Path weaveHome = Path.of(System.getProperty("user.home"), AlloyAgent.WEAVE_HOME_DIRECTORY);
+        Path userHome = Path.of(System.getProperty("user.home"));
+        Path weaveHome = userHome.resolve(AlloyAgent.WEAVE_HOME_DIRECTORY);
+        // Weave's guide puts the agent in .weave at the root of the drive when the user folder has a space in its path.
+        List<Path> otherAgentHomes = UserFolders.atDriveRoot(userHome, AlloyAgent.WEAVE_HOME_DIRECTORY).stream().toList();
         List<String> jvmArguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
-        new WeaveChainLoader(config, log, weaveHome).chain(this.instrumentation, launch.minecraftVersion(), jvmArguments);
+        new WeaveChainLoader(config, log, weaveHome, otherAgentHomes)
+                .chain(this.instrumentation, launch.minecraftVersion(), jvmArguments);
     }
 
     private void installForgeSupport(AlloyHome home, AlloyConfig config, AlloyLog log, LaunchInfo launch) {

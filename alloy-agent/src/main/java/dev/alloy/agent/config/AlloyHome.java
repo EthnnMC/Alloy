@@ -1,17 +1,23 @@
 package dev.alloy.agent.config;
 
+import dev.alloy.remap.io.UserFolders;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.CodeSource;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
- * The Alloy folder on this machine ({@code ~/.alloy} by default). Immutable: it only computes
- * paths, except {@link #createDirectories()}.
+ * The Alloy folder on this machine: the one the agent jar is installed in, by default
+ * {@code ~/.alloy}, or {@code .alloy} at the root of the drive when the user folder has a space in
+ * its path. Immutable: it only computes paths, except {@link #createDirectories()}.
  *
  * <pre>
  *   ~/.alloy/
+ *     agents/               the agent jar named in the launcher's JVM argument
  *     alloy.properties      settings
  *     mods/                 the user's Forge mods (never modified)
  *     mods/1.8.9/           mods for one game version only
@@ -26,6 +32,7 @@ public final class AlloyHome {
     public static final String HOME_PROPERTY = "alloy.home";
 
     private static final String DEFAULT_DIRECTORY_NAME = ".alloy";
+    private static final String AGENTS_DIRECTORY_NAME = "agents";
 
     private final Path root;
 
@@ -39,7 +46,8 @@ public final class AlloyHome {
     }
 
     /**
-     * Returns the folder given by {@code -Dalloy.home}, otherwise {@code ~/.alloy}.
+     * Returns the folder given by {@code -Dalloy.home}; otherwise the folder the running agent jar
+     * is installed in; otherwise the default one (see {@link #defaultRoot(Path)}).
      *
      * @return the Alloy folder of this machine
      */
@@ -48,7 +56,37 @@ public final class AlloyHome {
         if (configured != null && !configured.isBlank()) {
             return new AlloyHome(Path.of(configured));
         }
-        return new AlloyHome(Path.of(System.getProperty("user.home"), AlloyHome.DEFAULT_DIRECTORY_NAME));
+        return AlloyHome.ownJar().flatMap(AlloyHome::installedAround)
+                .orElseGet(() -> new AlloyHome(AlloyHome.defaultRoot(Path.of(System.getProperty("user.home")))));
+    }
+
+    /**
+     * Returns the Alloy folder an agent jar belongs to, that is {@code <folder>/agents/<jar>}; empty
+     * for a jar that sits elsewhere, such as a build output.
+     */
+    public static Optional<AlloyHome> installedAround(Path agentJar) {
+        Path directory = agentJar.toAbsolutePath().getParent();
+        boolean installed = directory != null && directory.getParent() != null
+                && directory.getFileName().toString().equals(AlloyHome.AGENTS_DIRECTORY_NAME);
+        return installed ? Optional.of(new AlloyHome(directory.getParent())) : Optional.empty();
+    }
+
+    /**
+     * Returns where Alloy installs itself for a user: {@code ~/.alloy}, or {@code .alloy} at the
+     * root of the drive when the user folder has a space in its path.
+     */
+    public static Path defaultRoot(Path userHome) {
+        return UserFolders.spaceFree(userHome, AlloyHome.DEFAULT_DIRECTORY_NAME);
+    }
+
+    /** The jar this class was loaded from; empty when it runs from loose class files. */
+    private static Optional<Path> ownJar() {
+        try {
+            CodeSource source = AlloyHome.class.getProtectionDomain().getCodeSource();
+            return source == null ? Optional.empty() : Optional.of(Path.of(source.getLocation().toURI()));
+        } catch (URISyntaxException | RuntimeException e) {
+            return Optional.empty();
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ package dev.alloy.devtools;
 
 import dev.alloy.remap.RemapToolkit;
 import dev.alloy.remap.fetch.ForgeDistribution;
+import dev.alloy.remap.io.UserFolders;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -74,7 +75,8 @@ public final class WorkspaceSetup {
         if (options.path("forge-universal").isPresent()) {
             return WorkspaceSetup.existing(options.path("forge-universal").get(), "the Forge universal jar");
         }
-        Path target = userHome.resolve(".alloy/libraries").resolve(ForgeDistribution.FILE_NAME);
+        // The agent's own library folder, so the jar is downloaded once for both.
+        Path target = UserFolders.spaceFree(userHome, ".alloy").resolve("libraries").resolve(ForgeDistribution.FILE_NAME);
         if (!ForgeDistribution.download().matches(target)) {
             this.output.println("Downloading " + ForgeDistribution.FILE_NAME + " from " + ForgeDistribution.DOWNLOAD_URI.getHost());
         }

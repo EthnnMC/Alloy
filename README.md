@@ -22,8 +22,13 @@ single JVM argument.
    ```
 4. Launch. The log is `%USERPROFILE%\.alloy\logs\latest.log`.
 
-**Weave:** use only Alloy's `-javaagent`. Alloy starts the Weave agent found in `~/.weave/agents`
-when a Weave mod exists for the launched version (`weave.enabled` in `~/.alloy/alloy.properties`).
+**Space in your Windows user name:** the JVM argument cannot contain a space, so the install script
+then uses `C:\.alloy` for everything (agent, mods, log) and prints the argument to paste. Alloy
+always works in the folder its agent jar is installed in.
+
+**Weave:** use only Alloy's `-javaagent`. Alloy starts the Weave agent found in `~/.weave/agents`,
+or in `C:\.weave\agents`, when a Weave mod exists for the launched version (`weave.enabled` in
+`alloy.properties`). Weave mods stay in `~/.weave/mods`, where Weave reads them.
 Never put Forge mods in Weave's `mods` folder.
 
 ## Limits

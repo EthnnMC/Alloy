@@ -95,6 +95,19 @@ class WeaveChainLoaderTest {
     }
 
     @Test
+    void findsTheAgentInAnotherWeaveFolderWhenTheUserFolderHasNone(@TempDir Path userWeaveHome, @TempDir Path rootWeaveHome)
+            throws IOException {
+        Path agent = rootWeaveHome.resolve("agents").resolve("Weave-Loader-Agent-1.4.0.jar");
+        WeaveChainLoaderTest.writeJar(agent, "net.weavemc.loader.impl.bootstrap.AgentKt", null);
+        AlloyConfig config = AlloyConfig.of(Map.of(AlloyConfig.WEAVE_ENABLED, "true"));
+        WeaveChainLoader loader = new WeaveChainLoader(config, this.logger, userWeaveHome, List.of(rootWeaveHome));
+
+        Optional<WeavePlan> plan = loader.plan(WeaveChainLoaderTest.VERSION, List.of());
+
+        assertEquals(agent, plan.orElseThrow().agentJar());
+    }
+
+    @Test
     void doesNotChainWhenTheVersionIsUnknown() throws IOException {
         assertEquals(Optional.empty(), this.loaderWith("true").plan(Optional.empty(), List.of()));
     }

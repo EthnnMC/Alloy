@@ -3,6 +3,8 @@ rem Installs the agent into %USERPROFILE%\.alloy and prints the JVM argument for
 setlocal
 cd /d "%~dp0.."
 set "ALLOY_HOME=%USERPROFILE%\.alloy"
+rem A space in the path would cut the JVM argument in two: install at the root of the drive instead.
+if not "%USERPROFILE%"=="%USERPROFILE: =%" set "ALLOY_HOME=%SystemDrive%\.alloy"
 if not exist alloy-dist\target\alloy-agent-0.1.0-SNAPSHOT.jar (
   echo The agent jar is missing: run scripts\build.cmd first.
   exit /b 1

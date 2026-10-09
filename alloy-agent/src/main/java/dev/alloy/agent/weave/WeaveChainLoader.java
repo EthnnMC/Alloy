@@ -39,17 +39,35 @@ public final class WeaveChainLoader {
     private final BridgeLogger logger;
     private final Path weaveHome;
 
+    /** Other folders that may hold the Weave agent, tried after {@link #weaveHome}. */
+    private final List<Path> otherAgentHomes;
+
     /**
      * Creates the chain loader.
      *
      * @param config    Alloy settings
      * @param logger    Alloy log
-     * @param weaveHome Weave folder ({@code ~/.weave})
+     * @param weaveHome Weave folder ({@code ~/.weave}), where Weave reads its mods
      */
     public WeaveChainLoader(AlloyConfig config, BridgeLogger logger, Path weaveHome) {
+        this(config, logger, weaveHome, List.of());
+    }
+
+    /**
+     * Creates the chain loader for an installation where the Weave agent may sit outside the user
+     * folder. Weave's guide puts a second copy of {@code .weave} at the root of the drive when the
+     * user folder has a space in its path, since the agent path is typed as a JVM argument.
+     *
+     * @param config          Alloy settings
+     * @param logger          Alloy log
+     * @param weaveHome       Weave folder ({@code ~/.weave}), where Weave reads its mods
+     * @param otherAgentHomes other Weave folders whose {@code agents} folder is searched too
+     */
+    public WeaveChainLoader(AlloyConfig config, BridgeLogger logger, Path weaveHome, List<Path> otherAgentHomes) {
         this.config = Objects.requireNonNull(config, "config");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.weaveHome = Objects.requireNonNull(weaveHome, "weaveHome");
+        this.otherAgentHomes = List.copyOf(otherAgentHomes);
     }
 
     /**
@@ -91,7 +109,8 @@ public final class WeaveChainLoader {
         Optional<Path> agentJar = this.findAgentJar();
         if (agentJar.isEmpty()) {
             if (mode == WeaveMode.ALWAYS) {
-                this.logger.warn("weave.enabled=true but no Weave agent jar was found in " + this.agentsDirectory());
+                this.logger.warn("weave.enabled=true but no Weave agent jar was found in "
+                        + this.weaveHome.resolve("agents") + " nor in " + this.otherAgentHomes);
             }
             return Optional.empty();
         }
@@ -129,25 +148,31 @@ public final class WeaveChainLoader {
         if (System.getProperty(WeaveChainLoader.VERSION_PROPERTY) == null) {
             System.setProperty(WeaveChainLoader.VERSION_PROPERTY, minecraftVersion);
         }
-        this.logger.info("Chaining Weave: " + plan.agentJar().getFileName() + " (" + plan.modCount() + " Weave mod(s))");
+        this.logger.info("Chaining Weave: " + plan.agentJar() + " (" + plan.modCount() + " Weave mod(s))");
         // The JarFile stays open on purpose: the system loader reads its classes until the end.
         instrumentation.appendToSystemClassLoaderSearch(new JarFile(plan.agentJar().toFile()));
         Class<?> weaveAgent = Class.forName(plan.premainClass(), true, ClassLoader.getSystemClassLoader());
         weaveAgent.getMethod("premain", String.class, Instrumentation.class).invoke(null, null, instrumentation);
     }
 
-    private Path agentsDirectory() {
-        return this.weaveHome.resolve("agents");
-    }
-
-    /** The jar from the settings, otherwise the newest of {@code ~/.weave/agents}. */
+    /**
+     * The jar from the settings, otherwise the newest jar of the first Weave folder that has an
+     * agent: {@code ~/.weave/agents}, then the other folders.
+     */
     private Optional<Path> findAgentJar() throws IOException {
         Optional<Path> configured = this.config.weaveAgent();
         if (configured.isPresent()) {
             return configured.filter(Files::isRegularFile);
         }
-        List<Path> jars = WeaveChainLoader.jarsIn(this.agentsDirectory());
-        return jars.stream().max(Comparator.comparingLong(WeaveChainLoader::lastModified));
+        List<Path> homes = new ArrayList<>(List.of(this.weaveHome));
+        homes.addAll(this.otherAgentHomes);
+        for (Path home : homes) {
+            List<Path> jars = WeaveChainLoader.jarsIn(home.resolve("agents"));
+            if (!jars.isEmpty()) {
+                return jars.stream().max(Comparator.comparingLong(WeaveChainLoader::lastModified));
+            }
+        }
+        return Optional.empty();
     }
 
     /** The mods Weave would load: those of {@code mods/} and of {@code mods/<version>/}. */
