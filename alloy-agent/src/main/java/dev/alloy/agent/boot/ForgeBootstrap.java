@@ -6,6 +6,7 @@ import dev.alloy.agent.forge.EmbeddedRuntime;
 import dev.alloy.agent.forge.ForgeLibrary;
 import dev.alloy.agent.forge.JarCache;
 import dev.alloy.agent.forge.ModDiscovery;
+import dev.alloy.agent.forge.PlainMinecraft;
 import dev.alloy.agent.forge.RuntimeJar;
 import dev.alloy.agent.launch.GameFiles;
 import dev.alloy.agent.launch.LaunchInfo;
@@ -117,7 +118,7 @@ public final class ForgeBootstrap implements GameStartListener {
 
         AlloyClassLoader modLoader = new AlloyClassLoader(ForgeBootstrap.classPath(runtime.jar(), forgeJar, mods), gameLoader);
         // Before anything of the mods runs: their mixins only reach classes the game has not loaded yet.
-        this.startMixins(mods, modLoader, gameLoader);
+        this.startMixins(mods, modLoader, gameLoader, new PlainMinecraft(toolkit, cache, vanillaJar, this.logger));
         RuntimeContext context = new RuntimeContext(
                 version, gameDirectory, this.home.root(), forgeJar, mods, this.config.asMap(), this.logger);
         GameEventSink sink = ForgeBootstrap.startRuntime(modLoader, context);
@@ -132,7 +133,8 @@ public final class ForgeBootstrap implements GameStartListener {
      * Lets game code reach the mods' classes, then starts their mixins. A failure is logged and
      * the mods are loaded without their mixins.
      */
-    private void startMixins(List<PreparedMod> mods, AlloyClassLoader modLoader, ClassLoader gameLoader) {
+    private void startMixins(
+            List<PreparedMod> mods, AlloyClassLoader modLoader, ClassLoader gameLoader, PlainMinecraft plainGame) {
         try {
             // ClassLoader.defineClass is protected, in a package Java keeps closed: an agent may open it for itself.
             this.instrumentation.redefineModule(ClassLoader.class.getModule(), Set.of(), Map.of(),
@@ -144,7 +146,7 @@ public final class ForgeBootstrap implements GameStartListener {
             GameClassSource classSource = new GameClassSource(modLoader, gameLoader, defineClass, this.logger);
             gameLoader.getClass().getField(GameHooks.CLASS_SOURCE_FIELD).set(null, classSource);
             new MixinSupport(this.home, this.logger, this.launch, this.instrumentation, this.transformer)
-                    .start(mods, modLoader, gameLoader, classSource);
+                    .start(mods, modLoader, gameLoader, classSource, plainGame::read);
         } catch (Throwable error) {
             // Throwable: the Mixin host is loaded by reflection and may fail to link.
             this.logger.error("Mixins could not be started: the mods are loaded without them", error);

@@ -65,10 +65,14 @@ final class MixinSupport {
      * @param gameLoader  the game's class loader
      * @param classSource what the game's loader asks for mod classes; it will also define the
      *                    classes Mixin generates
+     * @param plainGame   Minecraft classes by internal name, with game names but without Lunar's
+     *                    changes; used for a class Lunar's cache does not have
      * @throws IOException                  if a prepared jar or the host jar cannot be read
      * @throws ReflectiveOperationException if the Mixin host cannot be started
      */
-    void start(List<PreparedMod> mods, AlloyClassLoader modLoader, ClassLoader gameLoader, GameClassSource classSource)
+    void start(
+            List<PreparedMod> mods, AlloyClassLoader modLoader, ClassLoader gameLoader,
+            GameClassSource classSource, Function<String, byte[]> plainGame)
             throws IOException, ReflectiveOperationException {
         List<String> configs = new ArrayList<>();
         Set<String> targets = new LinkedHashSet<>();
@@ -87,7 +91,7 @@ final class MixinSupport {
 
         Set<String> loadedEarly = this.classesLoadedBy(gameLoader);
         MixinSetup setup = new MixinSetup(
-                configs, modLoader, this.classBytes(modLoader, gameLoader), MixinSupport.modResources(modLoader),
+                configs, modLoader, this.classBytes(modLoader, gameLoader, plainGame), MixinSupport.modResources(modLoader),
                 loadedEarly::contains, this.logger);
         ClassRewriter host = (ClassRewriter) Class.forName(MixinSupport.HOST_CLASS, true, hostLoader)
                 .getMethod(MixinSupport.HOST_START_METHOD, MixinSetup.class).invoke(null, setup);
@@ -125,17 +129,18 @@ final class MixinSupport {
 
     /**
      * Where Mixin reads a class by internal name: the mods and Forge first, then the game as
-     * Lunar runs it, then the JDK. The game loader's own answer comes last, as it is the class
-     * before Lunar rewrote it.
+     * Lunar runs it, then the JDK, then Minecraft without Lunar's changes. The game loader's own
+     * answer comes last: it is not reliable for a game class.
      */
-    private Function<String, byte[]> classBytes(AlloyClassLoader modLoader, ClassLoader gameLoader) {
+    private Function<String, byte[]> classBytes(
+            AlloyClassLoader modLoader, ClassLoader gameLoader, Function<String, byte[]> plainGame) {
         Optional<BakedClasses> baked = this.transformer.gameMainClassBytes()
                 .flatMap(mainClass -> BakedClasses.locate(this.launch.classPath(), mainClass));
         if (baked.isPresent()) {
             this.logger.info("Lunar's class cache: " + baked.get().file());
         } else {
             this.logger.warn("Lunar's class cache was not found (first launch after an update?): on this launch"
-                    + " mixins that need to know what a game class inherits may fail");
+                    + " mixins see Minecraft without Lunar's changes, and some may fail");
         }
         return internalName -> {
             String resourceName = internalName + MixinSupport.CLASS_SUFFIX;
@@ -145,6 +150,9 @@ final class MixinSupport {
             }
             if (found == null) {
                 found = MixinSupport.read(ClassLoader.getPlatformClassLoader().getResource(resourceName));
+            }
+            if (found == null) {
+                found = plainGame.apply(internalName);
             }
             return found != null ? found : MixinSupport.read(gameLoader.getResource(resourceName));
         };

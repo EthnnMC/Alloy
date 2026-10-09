@@ -190,6 +190,7 @@ public final class GameClassTransformer implements ClassFileTransformer {
             mixed = this.modRewriter.rewrite(className.replace('/', '.'), classBytes);
             if (mixed != null) {
                 this.mixedClasses.put(className, mixed);
+                this.logger.info("Mixins applied to " + className.replace('/', '.'));
             }
         }
         byte[] current = mixed == null ? classBytes : mixed;

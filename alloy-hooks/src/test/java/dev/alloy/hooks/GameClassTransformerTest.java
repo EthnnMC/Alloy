@@ -169,6 +169,44 @@ class GameClassTransformerTest {
         assertArrayEquals(first, second);
     }
 
+    // ------------------------------------------------------------------ mod mixins
+
+    @Test
+    void mixinTargetIsRewrittenOnceAndTheResultReused() throws Exception {
+        ClassLoader gameLoader = this.newBridgedGameLoader(new HashMap<>());
+        this.transformMain(gameLoader);
+        byte[] mixed = new SyntheticClass(GameClasses.MINECRAFT, Opcodes.V17)
+                .defaultConstructor()
+                .method(Opcodes.ACC_PUBLIC, "runTick", "()V", code -> code.visitInsn(Opcodes.RETURN))
+                .method(Opcodes.ACC_PUBLIC, "addedByAMixin", "()V", code -> code.visitInsn(Opcodes.RETURN))
+                .toByteArray();
+        List<String> asked = new ArrayList<>();
+        this.transformer.useModRewriter((className, classBytes) -> {
+            asked.add(className);
+            return mixed;
+        }, Set.of(GameClasses.MINECRAFT));
+
+        byte[] defined = this.transformMinecraft(gameLoader);
+        // A retransformation must end with the same members: Mixin is not asked again.
+        byte[] retransformed = this.transformer.transform(gameLoader, GameClasses.MINECRAFT, Object.class, null, defined);
+
+        assertArrayEquals(mixed, defined);
+        assertArrayEquals(mixed, retransformed);
+        assertEquals(List.of("net.minecraft.client.Minecraft"), asked);
+        assertEquals(1, this.logged.stream()
+                .filter(line -> line.equals("INFO Mixins applied to net.minecraft.client.Minecraft")).count());
+    }
+
+    @Test
+    void mixinTargetNoMixinChangesIsLeftAlone() throws Exception {
+        ClassLoader gameLoader = this.newBridgedGameLoader(new HashMap<>());
+        this.transformMain(gameLoader);
+        this.transformer.useModRewriter((className, classBytes) -> null, Set.of(GameClasses.MINECRAFT));
+
+        assertNull(this.transformMinecraft(gameLoader));
+        assertTrue(this.logged.stream().noneMatch(line -> line.contains("Mixins applied")));
+    }
+
     @Test
     void hookedClassNamesLeaveOutTheMainClass() {
         assertEquals(Set.of(GameClasses.MINECRAFT), this.transformer.hookedClassNames());

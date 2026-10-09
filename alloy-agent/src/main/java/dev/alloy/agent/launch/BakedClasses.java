@@ -18,15 +18,14 @@ import java.util.zip.ZipFile;
 /**
  * Reads the game classes as Lunar really runs them. Lunar rewrites every class when it first
  * loads it and keeps the result in a cache file ({@code cache/<hash>/<hash>/bake.zip} next to its
- * jars); its class loader, asked for a class as a resource, answers with the untouched original
- * instead. Mixin needs the real ones to know what a class inherits and declares.
+ * jars), one entry per class, named by the dotted class name. Its class loader, asked for a class
+ * as a resource, does not give these. Mixin needs them to know what a class inherits and declares.
  */
 public final class BakedClasses implements Closeable {
 
     private static final String CACHE_DIRECTORY = "cache";
     private static final String CACHE_FILE = "bake.zip";
-    private static final String CLASS_SUFFIX = ".class";
-    private static final String MAIN_CLASS_ENTRY = "net/minecraft/client/main/Main.class";
+    private static final String MAIN_CLASS_ENTRY = "net.minecraft.client.main.Main";
 
     private final Path file;
     private final ZipFile zip;
@@ -74,7 +73,7 @@ public final class BakedClasses implements Closeable {
     public byte[] read(String internalName) {
         // ZipFile is not safe for concurrent reads of the same instance.
         synchronized (this.zip) {
-            ZipEntry entry = this.zip.getEntry(internalName + BakedClasses.CLASS_SUFFIX);
+            ZipEntry entry = this.zip.getEntry(internalName.replace('/', '.'));
             if (entry == null) {
                 return null;
             }
