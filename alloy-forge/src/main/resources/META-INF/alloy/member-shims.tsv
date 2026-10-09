@@ -1,0 +1,5 @@
+# Members Forge adds to Minecraft classes that do not exist on Lunar.
+# Alloy replaces their call sites in mod bytecode. Tab-separated columns:
+# kind	owner	name	descriptor	action	target1	target2
+method	net/minecraft/network/NetworkManager	channel	()Lio/netty/channel/Channel;	getfield	channel	Lio/netty/channel/Channel;
+method	net/minecraft/network/NetworkManager	getDirection	()Lnet/minecraft/network/EnumPacketDirection;	getfield	direction	Lnet/minecraft/network/EnumPacketDirection;

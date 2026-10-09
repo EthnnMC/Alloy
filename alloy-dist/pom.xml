@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dev.alloy</groupId>
+    <artifactId>alloy-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>alloy-dist</artifactId>
+  <name>Alloy :: Distribution</name>
+  <description>
+    Builds the final agent jar, target/alloy-agent-(version).jar. No code, only the assembly recipe.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>dev.alloy</groupId>
+      <artifactId>alloy-agent</artifactId>
+    </dependency>
+    <!-- Embedded as a file, not shaded; "provided" only orders the build. -->
+    <dependency>
+      <groupId>dev.alloy</groupId>
+      <artifactId>alloy-forge</artifactId>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- 1. Copy the Forge runtime jar into the resources under the name the agent expects. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>embed-forge-runtime</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>dev.alloy</groupId>
+                  <artifactId>alloy-forge</artifactId>
+                  <version>${project.version}</version>
+                  <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                  <destFileName>alloy-forge-runtime.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 2. Shade the agent and its dependencies into one jar with a Java-agent manifest. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <finalName>alloy-agent-${project.version}</finalName>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <!-- Relocated: Lunar already has its own ASM on the class path. -->
+              <relocations>
+                <relocation>
+                  <pattern>org.objectweb.asm</pattern>
+                  <shadedPattern>dev.alloy.shaded.asm</shadedPattern>
+                </relocation>
+              </relocations>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <manifestEntries>
+                    <Premain-Class>dev.alloy.agent.AlloyAgent</Premain-Class>
+                    <!-- Required: our transformer runs after Weave's, and Weave needs it too. -->
+                    <Can-Retransform-Classes>true</Can-Retransform-Classes>
+                    <Can-Redefine-Classes>false</Can-Redefine-Classes>
+                    <Implementation-Title>Alloy</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                  </manifestEntries>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>module-info.class</exclude>
+                    <exclude>META-INF/MANIFEST.MF</exclude>
+                    <exclude>META-INF/maven/**</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,20 @@
+# Maven
+target/
+*.class
+dependency-reduced-pom.xml
+
+# IntelliJ IDEA (the project is described by the pom.xml files)
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Generated locally, never redistributed (renamed Minecraft and Forge jars)
+/workspace/
+*.log
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dev.alloy</groupId>
+    <artifactId>alloy-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>alloy-agent</artifactId>
+  <name>Alloy :: Agent</name>
+  <description>
+    The -javaagent entry point: config, log, Weave chain-loading, mod preparation, mod class loader.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>dev.alloy</groupId>
+      <artifactId>alloy-bridge</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>dev.alloy</groupId>
+      <artifactId>alloy-remap</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>dev.alloy</groupId>
+      <artifactId>alloy-hooks</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm-tree</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
