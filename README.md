@@ -96,3 +96,7 @@ Some tests need files from a local Lunar install and skip themselves when those 
 GPL-3.0, like Weave, whose class-loader technique Alloy ports. Forge and Minecraft are never copied
 or redistributed. The agent jar embeds SpongePowered Mixin (MIT), ASM (BSD-3-Clause), Guava and
 Gson (Apache-2.0).
+
+## Credits
+
+Built with the help of [Claude Code](https://claude.com/claude-code).
