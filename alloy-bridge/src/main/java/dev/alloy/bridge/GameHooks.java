@@ -17,6 +17,12 @@ public final class GameHooks {
     /** Prefix of the classes the game's class loader must fetch from the system class loader. */
     public static final String BRIDGE_PACKAGE_PREFIX = "dev.alloy.bridge.";
 
+    /**
+     * Name of the static field Alloy adds to the game's class loader class. The agent stores there
+     * the {@code Function<String, Class<?>>} that loader asks before looking itself.
+     */
+    public static final String CLASS_SOURCE_FIELD = "alloy$classSource";
+
     /** Maximum number of logged failures per hook. */
     private static final int MAX_REPORTS_PER_HOOK = 3;
 
@@ -342,6 +348,28 @@ public final class GameHooks {
         }
     }
 
+    /** See {@link GameEventSink#onBackgroundDrawn(Object, boolean)}; called from {@code drawBackground}. */
+    public static void backgroundDrawn(Object screen) {
+        GameHooks.backgroundDrawn(screen, false);
+    }
+
+    /** See {@link GameEventSink#onBackgroundDrawn(Object, boolean)}; called from {@code drawWorldBackground}. */
+    public static void worldBackgroundDrawn(Object screen) {
+        GameHooks.backgroundDrawn(screen, true);
+    }
+
+    private static void backgroundDrawn(Object screen, boolean overWorld) {
+        GameEventSink s = GameHooks.enter("backgroundDrawn");
+        if (s == null) {
+            return;
+        }
+        try {
+            s.onBackgroundDrawn(screen, overWorld);
+        } catch (Throwable t) {
+            GameHooks.report("backgroundDrawn", t);
+        }
+    }
+
     /** See {@link GameEventSink#onClientCommand(String, boolean)}. */
     public static boolean clientCommand(String message, boolean addToChat) {
         GameEventSink s = GameHooks.enter("clientCommand");
@@ -480,6 +508,106 @@ public final class GameHooks {
         } catch (Throwable t) {
             GameHooks.report("attackEntity", t);
             return false;
+        }
+    }
+
+    /** See {@link GameEventSink#onEntityInteract(Object, Object)}. */
+    public static boolean entityInteract(Object player, Object target) {
+        GameEventSink s = GameHooks.enter("entityInteract");
+        if (s == null) {
+            return false;
+        }
+        try {
+            return s.onEntityInteract(player, target);
+        } catch (Throwable t) {
+            GameHooks.report("entityInteract", t);
+            return false;
+        }
+    }
+
+    /** See {@link GameEventSink#onUseItem(Object, Object, Object, Object)}. */
+    public static boolean useItem(Object controller, Object player, Object world, Object stack) {
+        GameEventSink s = GameHooks.enter("useItem");
+        if (s == null) {
+            return VanillaCalls.sendUseItem(controller, player, world, stack);
+        }
+        try {
+            return s.onUseItem(controller, player, world, stack);
+        } catch (Throwable t) {
+            GameHooks.report("useItem", t);
+            return false;
+        }
+    }
+
+    /** See {@link GameEventSink#onPlaySoundAtEntity(Object, String, float, float)}. */
+    public static boolean entitySound(Object entity, String name, float volume, float pitch) {
+        GameEventSink s = GameHooks.enter("entitySound");
+        if (s == null) {
+            return false;
+        }
+        try {
+            return s.onPlaySoundAtEntity(entity, name, volume, pitch);
+        } catch (Throwable t) {
+            GameHooks.report("entitySound", t);
+            return false;
+        }
+    }
+
+    /** See {@link GameEventSink#onEntityConstructing(Object)}. */
+    public static void entityConstructing(Object entity) {
+        GameEventSink s = GameHooks.enter("entityConstructing");
+        if (s == null) {
+            return;
+        }
+        try {
+            s.onEntityConstructing(entity);
+        } catch (Throwable t) {
+            GameHooks.report("entityConstructing", t);
+        }
+    }
+
+    /** See {@link GameEventSink#onLivingJump(Object)}. */
+    public static void livingJump(Object entity) {
+        GameEventSink s = GameHooks.enter("livingJump");
+        if (s == null) {
+            return;
+        }
+        try {
+            s.onLivingJump(entity);
+        } catch (Throwable t) {
+            GameHooks.report("livingJump", t);
+        }
+    }
+
+    /** See {@link GameEventSink#onChunkLoad(Object)}. */
+    public static void chunkLoad(Object chunk) {
+        GameEventSink s = GameHooks.enter("chunkLoad");
+        if (s == null) {
+            return;
+        }
+        try {
+            s.onChunkLoad(chunk);
+        } catch (Throwable t) {
+            GameHooks.report("chunkLoad", t);
+        }
+    }
+
+    /** Variant of {@link #chunkLoad(Object)} that filters a returned chunk. */
+    public static Object chunkLoaded(Object chunk) {
+        GameHooks.chunkLoad(chunk);
+        return chunk;
+    }
+
+    /** See {@link GameEventSink#onChunkUnload(Object)}. */
+    public static void chunkUnload(Object chunk) {
+        GameEventSink s = GameHooks.enter("chunkUnload");
+        if (s == null) {
+            return;
+        }
+        try {
+            s.onChunkUnload(chunk);
+        } catch (Throwable t) {
+            GameHooks.report("chunkUnload", t);
         }
     }
 

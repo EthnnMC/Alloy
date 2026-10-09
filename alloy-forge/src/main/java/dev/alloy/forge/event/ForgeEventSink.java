@@ -5,6 +5,7 @@ import dev.alloy.bridge.GuiOpenDecision;
 import dev.alloy.bridge.RuntimeContext;
 import dev.alloy.forge.env.ForgeEnvironment;
 import dev.alloy.forge.loader.ModLifecycle;
+import dev.alloy.forge.optifine.OptiFineBridge;
 import java.util.List;
 import java.util.Objects;
 import net.minecraft.client.Minecraft;
@@ -12,6 +13,7 @@ import net.minecraft.client.audio.ISound;
 import net.minecraft.client.audio.SoundManager;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.multiplayer.PlayerControllerMP;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.entity.RenderPlayer;
@@ -24,6 +26,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 
 /**
@@ -62,6 +65,7 @@ public final class ForgeEventSink implements GameEventSink {
     public void onModsConstruct() {
         Minecraft minecraft = Minecraft.getMinecraft();
         ForgeEnvironment.attachClient(minecraft);
+        OptiFineBridge.connect(Minecraft.class.getClassLoader(), this.context.logger());
         this.lifecycle.addResourcePacks(minecraft);
         this.lifecycle.constructMods();
     }
@@ -166,6 +170,11 @@ public final class ForgeEventSink implements GameEventSink {
     }
 
     @Override
+    public void onBackgroundDrawn(Object screen, boolean overWorld) {
+        this.gui.onBackgroundDrawn((GuiScreen) screen, overWorld);
+    }
+
+    @Override
     public boolean onClientCommand(String message, boolean addToChat) {
         return this.gui.onClientCommand(message, addToChat);
     }
@@ -217,6 +226,42 @@ public final class ForgeEventSink implements GameEventSink {
     @Override
     public boolean onAttackEntity(Object player, Object target) {
         return this.world.onAttackEntity((EntityPlayer) player, (Entity) target);
+    }
+
+    @Override
+    public boolean onEntityInteract(Object player, Object target) {
+        return this.world.onEntityInteract((EntityPlayer) player, (Entity) target);
+    }
+
+    @Override
+    public boolean onUseItem(Object controller, Object player, Object world, Object stack) {
+        return this.world.onUseItem(
+                (PlayerControllerMP) controller, (EntityPlayer) player, (World) world, (ItemStack) stack);
+    }
+
+    @Override
+    public boolean onPlaySoundAtEntity(Object entity, String name, float volume, float pitch) {
+        return this.world.onPlaySoundAtEntity((Entity) entity, name, volume, pitch);
+    }
+
+    @Override
+    public void onEntityConstructing(Object entity) {
+        this.world.onEntityConstructing((Entity) entity);
+    }
+
+    @Override
+    public void onLivingJump(Object entity) {
+        this.world.onLivingJump((EntityLivingBase) entity);
+    }
+
+    @Override
+    public void onChunkLoad(Object chunk) {
+        this.world.onChunkLoad((Chunk) chunk);
+    }
+
+    @Override
+    public void onChunkUnload(Object chunk) {
+        this.world.onChunkUnload((Chunk) chunk);
     }
 
     // ------------------------------------------------------------------ rendering

@@ -133,6 +133,16 @@ public interface GameEventSink {
     void actionPerformed(Object screen, Object button);
 
     /**
+     * End of {@code GuiScreen.drawBackground} or {@code drawWorldBackground}:
+     * {@code GuiScreenEvent.BackgroundDrawnEvent}.
+     *
+     * @param screen    the screen ({@code GuiScreen})
+     * @param overWorld {@code true} from {@code drawWorldBackground}, which only counts while a
+     *                  world is shown (otherwise it delegates to {@code drawBackground})
+     */
+    void onBackgroundDrawn(Object screen, boolean overWorld);
+
+    /**
      * Start of {@code GuiScreen.sendChatMessage(String, boolean)}: client-side commands ({@code ClientCommandHandler}).
      *
      * @return {@code true} if a client command handled the message (it is then not sent to the server)
@@ -201,6 +211,49 @@ public interface GameEventSink {
      * @return {@code true} if the attack is cancelled
      */
     boolean onAttackEntity(Object player, Object target);
+
+    /**
+     * Start of {@code EntityPlayer.interactWith}: {@code EntityInteractEvent}.
+     *
+     * @param player the player ({@code EntityPlayer})
+     * @param target the right-clicked entity ({@code Entity})
+     * @return {@code true} if the interaction is cancelled
+     */
+    boolean onEntityInteract(Object player, Object target);
+
+    /**
+     * Replaces {@code PlayerControllerMP.sendUseItem} when an item is used in the air:
+     * {@code PlayerInteractEvent(RIGHT_CLICK_AIR)}, then the original call unless cancelled.
+     *
+     * @param controller the {@code PlayerControllerMP}
+     * @param player     the player ({@code EntityPlayer})
+     * @param world      the world ({@code World})
+     * @param stack      the held item ({@code ItemStack})
+     * @return what the original call returned, or {@code false} if cancelled
+     */
+    boolean onUseItem(Object controller, Object player, Object world, Object stack);
+
+    /**
+     * Start of {@code World.playSoundAtEntity}, {@code World.playSoundToNearExcept} and
+     * {@code EntityPlayerSP.playSound}: {@code PlaySoundAtEntityEvent}. Changes a mod makes to the
+     * sound are not applied.
+     *
+     * @param entity the entity making the sound ({@code Entity})
+     * @return {@code true} if the sound must not be played
+     */
+    boolean onPlaySoundAtEntity(Object entity, String name, float volume, float pitch);
+
+    /** End of the {@code Entity} constructor: {@code EntityEvent.EntityConstructing}. */
+    void onEntityConstructing(Object entity);
+
+    /** End of {@code EntityLivingBase.jump}: {@code LivingEvent.LivingJumpEvent}. */
+    void onLivingJump(Object entity);
+
+    /** A chunk was loaded ({@code Chunk}): {@code ChunkEvent.Load}. */
+    void onChunkLoad(Object chunk);
+
+    /** End of {@code Chunk.onChunkUnload}: {@code ChunkEvent.Unload}. */
+    void onChunkUnload(Object chunk);
 
     // ------------------------------------------------------------------ rendering
 

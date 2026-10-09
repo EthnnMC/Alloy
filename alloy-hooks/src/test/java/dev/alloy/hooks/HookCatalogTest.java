@@ -49,12 +49,15 @@ class HookCatalogTest {
                 "boot.main", "life.construct", "life.preinit", "life.init",
                 "tick.client", "tick.render", "tick.player",
                 "input.mouse", "input.keyboard", "gui.input.mouse", "gui.input.keyboard",
-                "gui.open", "gui.init", "gui.draw", "gui.action",
+                "gui.open", "gui.init", "gui.draw", "gui.action", "gui.background", "gui.background.world",
                 "chat.command", "chat.complete.request", "chat.complete.response", "chat.received", "net.join",
                 "world.unload", "world.load", "entity.join.spawn", "entity.join.surroundings",
-                "entity.living.update", "entity.attack",
+                "entity.living.update", "entity.attack", "entity.interact", "player.use.item",
+                "sound.entity", "sound.entity.near", "sound.entity.self",
+                "entity.construct", "entity.living.jump", "chunk.load.client", "chunk.load", "chunk.unload",
                 "overlay.all", "overlay.chat", "overlay.hotbar", "overlay.experience", "overlay.jumpbar",
-                "overlay.bosshealth", "overlay.helmet", "overlay.portal", "overlay.playerlist", "overlay.crosshairs",
+                "overlay.bosshealth", "overlay.helmet", "overlay.portal", "overlay.playerlist",
+                "overlay.debug", "overlay.stats", "overlay.crosshairs",
                 "render.living", "render.living.specials", "render.player", "render.world.last",
                 "render.texture.stitch", "render.fov", "render.tooltip", "render.highlight", "sound.play");
 
@@ -79,7 +82,7 @@ class HookCatalogTest {
     void hooksAreFoundByTargetClass() {
         List<String> ids = this.catalog.hooksFor("net/minecraft/world/World").stream().map(Hook::id).toList();
 
-        assertEquals(List.of("entity.join.spawn", "entity.join.surroundings"), ids);
+        assertEquals(List.of("entity.join.spawn", "entity.join.surroundings", "sound.entity", "sound.entity.near"), ids);
     }
 
     @Test

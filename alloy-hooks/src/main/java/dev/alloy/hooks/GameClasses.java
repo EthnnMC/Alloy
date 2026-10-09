@@ -21,15 +21,21 @@ final class GameClasses {
     static final String GUI_INGAME = "net/minecraft/client/gui/GuiIngame";
     static final String GUI_NEW_CHAT = "net/minecraft/client/gui/GuiNewChat";
     static final String GUI_PLAYER_TAB_OVERLAY = "net/minecraft/client/gui/GuiPlayerTabOverlay";
+    static final String GUI_OVERLAY_DEBUG = "net/minecraft/client/gui/GuiOverlayDebug";
 
     static final String NET_HANDLER_PLAY_CLIENT = "net/minecraft/client/network/NetHandlerPlayClient";
     static final String WORLD_CLIENT = "net/minecraft/client/multiplayer/WorldClient";
     static final String WORLD = "net/minecraft/world/World";
+    static final String CHUNK = "net/minecraft/world/chunk/Chunk";
+    static final String CHUNK_PROVIDER_CLIENT = "net/minecraft/client/multiplayer/ChunkProviderClient";
+    static final String PLAYER_CONTROLLER_MP = "net/minecraft/client/multiplayer/PlayerControllerMP";
     static final String SOUND_MANAGER = "net/minecraft/client/audio/SoundManager";
 
+    static final String ENTITY = "net/minecraft/entity/Entity";
     static final String ENTITY_LIVING_BASE = "net/minecraft/entity/EntityLivingBase";
     static final String ENTITY_PLAYER = "net/minecraft/entity/player/EntityPlayer";
     static final String ABSTRACT_CLIENT_PLAYER = "net/minecraft/client/entity/AbstractClientPlayer";
+    static final String ENTITY_PLAYER_SP = "net/minecraft/client/entity/EntityPlayerSP";
     static final String ITEM_STACK = "net/minecraft/item/ItemStack";
 
     /** LWJGL 2 classes that dispatch mouse and keyboard events. */

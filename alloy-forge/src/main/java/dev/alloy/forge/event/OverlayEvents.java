@@ -15,8 +15,8 @@ import net.minecraftforge.common.MinecraftForge;
  * In-game overlay events ({@code RenderGameOverlayEvent}). Alloy keeps the game's own UI (where
  * Lunar draws its overlay) and publishes the events from hooks in the methods that draw each
  * element; all events of a frame share a parent event carrying the screen resolution.
- * Not supported yet: {@code HEALTH}, {@code ARMOR}, {@code FOOD}, {@code AIR}, {@code HEALTHMOUNT}
- * and {@code DEBUG} (the game draws them in one block).
+ * The game draws health, armor, food and air in one method: their four events fire together around
+ * it, and the bars are only hidden when all four are cancelled. {@code HEALTHMOUNT} is not supported.
  */
 final class OverlayEvents {
 
@@ -25,6 +25,11 @@ final class OverlayEvents {
     private static final int TEXT_MARGIN = 2;
     private static final int TEXT_COLOR = 0xE0E0E0;
     private static final int TEXT_BACKGROUND = 0x90505050;
+
+    /** Pseudo-element sent by the hook around {@code GuiIngame.renderPlayerStats}. */
+    private static final String PLAYER_STATS = "PLAYER_STATS";
+    private static final List<ElementType> PLAYER_STATS_TYPES =
+            List.of(ElementType.HEALTH, ElementType.ARMOR, ElementType.FOOD, ElementType.AIR);
 
     /** Parent event of the current frame; {@code null} outside UI drawing. */
     private RenderGameOverlayEvent frame;
@@ -48,6 +53,14 @@ final class OverlayEvents {
 
     /** See {@code GameEventSink.onOverlayElementPre}. */
     boolean onOverlayElementPre(String element) {
+        if (OverlayEvents.PLAYER_STATS.equals(element)) {
+            boolean allCancelled = true;
+            for (ElementType part : OverlayEvents.PLAYER_STATS_TYPES) {
+                // Not short-circuited: every event must be published.
+                allCancelled &= this.pre(part);
+            }
+            return allCancelled;
+        }
         ElementType type = ElementType.valueOf(element);
         if (type == ElementType.CHAT) {
             RenderGameOverlayEvent parent = this.currentFrame();
@@ -59,6 +72,10 @@ final class OverlayEvents {
 
     /** See {@code GameEventSink.onOverlayElementPost}. */
     void onOverlayElementPost(String element) {
+        if (OverlayEvents.PLAYER_STATS.equals(element)) {
+            OverlayEvents.PLAYER_STATS_TYPES.forEach(this::post);
+            return;
+        }
         this.post(ElementType.valueOf(element));
     }
 

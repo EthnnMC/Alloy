@@ -45,6 +45,20 @@ final class VanillaCalls {
         }
     }
 
+    /** Equivalent of {@code controller.sendUseItem(player, world, stack)} on a {@code PlayerControllerMP}. */
+    static boolean sendUseItem(Object controller, Object player, Object world, Object stack) {
+        try {
+            for (Method method : controller.getClass().getMethods()) {
+                if (method.getName().equals("sendUseItem") && method.getParameterCount() == 3) {
+                    return (Boolean) method.invoke(controller, player, world, stack);
+                }
+            }
+            throw new NoSuchMethodException(controller.getClass().getName() + ".sendUseItem");
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Cannot replay PlayerControllerMP.sendUseItem", e);
+        }
+    }
+
     private static boolean invokeStaticNext(String className) {
         try {
             // On the game thread the context class loader is Lunar's, which can see LWJGL.

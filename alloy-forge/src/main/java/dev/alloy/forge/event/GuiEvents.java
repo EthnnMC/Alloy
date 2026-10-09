@@ -66,6 +66,15 @@ final class GuiEvents {
         }
     }
 
+    /** See {@code GameEventSink.onBackgroundDrawn}. */
+    void onBackgroundDrawn(GuiScreen screen, boolean overWorld) {
+        // Without a world, drawWorldBackground delegates to drawBackground, which reports it itself.
+        if (overWorld && Minecraft.getMinecraft().theWorld == null) {
+            return;
+        }
+        MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.BackgroundDrawnEvent(screen));
+    }
+
     /** See {@code GameEventSink.onClientCommand}. */
     boolean onClientCommand(String message, boolean addToChat) {
         Minecraft minecraft = Minecraft.getMinecraft();

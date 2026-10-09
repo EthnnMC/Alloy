@@ -140,6 +140,13 @@ final class ForgeHookTable {
                 new RedirectInvoke(
                         Anchor.invoke(GameClasses.GUI_SCREEN, "actionPerformed", "(L" + GameClasses.GUI_BUTTON + ";)V"),
                         HookCall.to("actionPerformed", "(Ljava/lang/Object;Ljava/lang/Object;)V"), false)));
+
+        hooks.add(Hook.inMethod("gui.background", GameClasses.GUI_SCREEN, "drawBackground", "(I)V",
+                new ReturnCall(HookCall.to("backgroundDrawn", ForgeHookTable.OBJECT_TO_VOID, self), Occurrence.EVERY)));
+        // The last RETURN is the normal exit; the first one is a cancellation decided by Lunar.
+        hooks.add(Hook.inMethod("gui.background.world", GameClasses.GUI_SCREEN, "drawWorldBackground", "(I)V",
+                new ReturnCall(HookCall.to("worldBackgroundDrawn", ForgeHookTable.OBJECT_TO_VOID, self),
+                        Occurrence.LAST)));
     }
 
     /** Client commands, completion, received messages and joining a server. */
@@ -191,6 +198,55 @@ final class ForgeHookTable {
         hooks.add(Hook.inMethod("entity.attack", GameClasses.ENTITY_PLAYER, "attackTargetEntityWithCurrentItem",
                 "(Lnet/minecraft/entity/Entity;)V",
                 new HeadCancel(HookCall.to("attackEntity", ForgeHookTable.TWO_OBJECTS_TO_BOOLEAN, self, first))));
+        hooks.add(Hook.inMethod("entity.interact", GameClasses.ENTITY_PLAYER, "interactWith",
+                "(L" + GameClasses.ENTITY + ";)Z",
+                new HeadCancel(HookCall.to("entityInteract", ForgeHookTable.TWO_OBJECTS_TO_BOOLEAN, self, first))));
+
+        // Lunar moved this call into a synthetic method, so it is searched everywhere.
+        hooks.add(Hook.inAnyMethod("player.use.item", GameClasses.MINECRAFT,
+                new RedirectInvoke(
+                        Anchor.invoke(GameClasses.PLAYER_CONTROLLER_MP, "sendUseItem", "(L" + GameClasses.ENTITY_PLAYER
+                                + ";L" + GameClasses.WORLD + ";L" + GameClasses.ITEM_STACK + ";)Z"),
+                        HookCall.to("useItem",
+                                "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z"),
+                        false)));
+
+        ForgeHookTable.addEntitySounds(hooks);
+
+        hooks.add(Hook.inMethod("entity.construct", GameClasses.ENTITY, "<init>", "(L" + GameClasses.WORLD + ";)V",
+                new ReturnCall(HookCall.to("entityConstructing", ForgeHookTable.OBJECT_TO_VOID, self),
+                        Occurrence.EVERY)));
+        hooks.add(Hook.inMethod("entity.living.jump", GameClasses.ENTITY_LIVING_BASE, "jump", ForgeHookTable.VOID,
+                new ReturnCall(HookCall.to("livingJump", ForgeHookTable.OBJECT_TO_VOID, self), Occurrence.EVERY)));
+
+        // The client never calls Chunk.onChunkLoad: its chunks are reported where they are created.
+        hooks.add(Hook.inMethod("chunk.load.client", GameClasses.CHUNK_PROVIDER_CLIENT, "loadChunk",
+                "(II)L" + GameClasses.CHUNK + ";",
+                new ReturnFilter(HookCall.to("chunkLoaded", "(Ljava/lang/Object;)Ljava/lang/Object;"))));
+        hooks.add(Hook.inMethod("chunk.load", GameClasses.CHUNK, "onChunkLoad", ForgeHookTable.VOID,
+                new ReturnCall(HookCall.to("chunkLoad", ForgeHookTable.OBJECT_TO_VOID, self), Occurrence.EVERY)));
+        hooks.add(Hook.inMethod("chunk.unload", GameClasses.CHUNK, "onChunkUnload", ForgeHookTable.VOID,
+                new ReturnCall(HookCall.to("chunkUnload", ForgeHookTable.OBJECT_TO_VOID, self), Occurrence.EVERY)));
+    }
+
+    /** The three methods through which an entity plays a sound. */
+    private static void addEntitySounds(List<Hook> hooks) {
+        HookArgument self = HookArgument.self();
+        HookArgument first = HookArgument.parameter(1);
+        HookArgument second = HookArgument.parameter(2);
+        HookArgument third = HookArgument.parameter(3);
+        HookArgument fourth = HookArgument.parameter(4);
+        String descriptor = "(Ljava/lang/Object;Ljava/lang/String;FF)Z";
+
+        hooks.add(Hook.inMethod("sound.entity", GameClasses.WORLD, "playSoundAtEntity",
+                "(L" + GameClasses.ENTITY + ";Ljava/lang/String;FF)V",
+                new HeadCancel(HookCall.to("entitySound", descriptor, first, second, third, fourth))));
+        hooks.add(Hook.inMethod("sound.entity.near", GameClasses.WORLD, "playSoundToNearExcept",
+                "(L" + GameClasses.ENTITY_PLAYER + ";Ljava/lang/String;FF)V",
+                new HeadCancel(HookCall.to("entitySound", descriptor, first, second, third, fourth))));
+        hooks.add(Hook.inMethod("sound.entity.self", GameClasses.ENTITY_PLAYER_SP, "playSound",
+                "(Ljava/lang/String;FF)V",
+                new HeadCancel(HookCall.to("entitySound", descriptor, self, first, second, third))));
     }
 
     /**
@@ -221,6 +277,16 @@ final class ForgeHookTable {
         hooks.add(ForgeHookTable.overlayElement("overlay.playerlist", "PLAYER_LIST",
                 GameClasses.GUI_PLAYER_TAB_OVERLAY, "renderPlayerlist",
                 "(ILnet/minecraft/scoreboard/Scoreboard;Lnet/minecraft/scoreboard/ScoreObjective;)V"));
+
+        hooks.add(ForgeHookTable.overlayElement("overlay.debug", "DEBUG",
+                GameClasses.GUI_OVERLAY_DEBUG, "renderDebugInfo", "(" + resolution + ")V"));
+
+        // One method draws health, armor, food and air: the runtime publishes the four events around it.
+        HookArgument stats = HookArgument.constant("PLAYER_STATS");
+        hooks.add(Hook.inMethod("overlay.stats", GameClasses.GUI_INGAME, "renderPlayerStats", "(" + resolution + ")V",
+                new HeadCancel(HookCall.to("overlayElementPre", ForgeHookTable.STRING_TO_BOOLEAN, stats)),
+                new ReturnCall(HookCall.to("overlayElementPost", ForgeHookTable.STRING_TO_VOID, stats),
+                        Occurrence.LAST)));
 
         // showCrosshair() answers a question: nothing to report afterwards.
         hooks.add(Hook.inMethod("overlay.crosshairs", GameClasses.GUI_INGAME, "showCrosshair", "()Z",
