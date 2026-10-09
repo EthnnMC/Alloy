@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.moonsworth.lunar.genesis.FakeGenesisLoader;
+import dev.alloy.bridge.GameHooks;
 import dev.alloy.hooks.testing.ByteClassLoader;
 import dev.alloy.hooks.testing.BytecodeChecks;
 import dev.alloy.hooks.testing.ClassHierarchy;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.Opcodes;
 
@@ -67,6 +69,21 @@ class GameLoaderBridgePatchTest {
 
         // Only the bridge package is shared: the rest of the agent stays invisible to the game.
         assertThrows(ClassNotFoundException.class, () -> gameLoader.loadClass("dev.alloy.hooks.HookCatalog"));
+    }
+
+    @Test
+    void patchedLoaderAsksThePublishedClassSourceFirst() throws Exception {
+        byte[] patched = this.patch.patch(GameLoaderBridgePatchTest.fakeLoaderBytes()).orElseThrow();
+        ClassLoader gameLoader = GameLoaderBridgePatchTest.newGameLoader(patched);
+        // Stands for a mod class: any class the game loader could not find by itself.
+        Function<String, Class<?>> source =
+                name -> name.equals("example.mod.Helper") ? GameLoaderBridgePatchTest.class : null;
+        gameLoader.getClass().getField(GameHooks.CLASS_SOURCE_FIELD).set(null, source);
+
+        assertSame(GameLoaderBridgePatchTest.class, gameLoader.loadClass("example.mod.Helper"));
+        // A name the source does not know goes on to the loader's own lookup.
+        assertSame(gameLoader, gameLoader.loadClass(GameLoaderBridgePatchTest.GAME_CLASS).getClassLoader());
+        assertThrows(ClassNotFoundException.class, () -> gameLoader.loadClass("example.mod.Missing"));
     }
 
     @Test

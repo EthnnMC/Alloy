@@ -35,6 +35,7 @@
     <module>alloy-bridge</module>
     <module>alloy-remap</module>
     <module>alloy-hooks</module>
+    <module>alloy-mixin</module>
     <module>alloy-agent</module>
     <module>alloy-devtools</module>
   </modules>

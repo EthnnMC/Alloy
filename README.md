@@ -31,16 +31,24 @@ Never put Forge mods in Weave's `mods` folder.
 Alloy does not run real Forge: it gives mods the Forge classes and fires Forge events from hooks
 injected into the game.
 
-- Not supported: coremods, tweakers, Mixin mods, block/item registries, Forge network channels,
-  `EnumHelper`, `@Optional`.
-- Events fired: ticks, keyboard/mouse input, screen open/init/draw/buttons, chat received, client
-  commands, connect/disconnect, world load/unload, entity join/update/attack, HUD overlay
-  (`ALL`, `CHAT`, `HOTBAR`, `EXPERIENCE`, `JUMPBAR`, `BOSSHEALTH`, `HELMET`, `PORTAL`, `PLAYER_LIST`,
-  `CROSSHAIRS`, `TEXT`), entity/player rendering, `RenderWorldLastEvent`, texture stitch, FOV,
-  tooltips, sounds, block highlight.
+- Not supported: coremods, tweakers, block/item registries, Forge network channels, `EnumHelper`,
+  `@Optional`.
+- Mixin mods: their mixins are applied by the real Mixin library (0.8.5), run by Alloy on the
+  classes Lunar loads. A mixin that aims at code Lunar or OptiFine already rewrote may not find
+  it: it is then logged and skipped instead of stopping the game. Mixins registered from code (a
+  tweaker or coremod calling `Mixins.addConfiguration`) are not seen; only the `MixinConfigs`
+  manifest attribute is.
+- Events published: see `alloy-forge/src/main/resources/META-INF/alloy/fired-events.txt`. Fog,
+  camera, hand, first-person overlay and item-frame events come from OptiFine's own Forge call
+  sites, which Alloy connects to its Forge classes.
+- HUD: health, armor, food and air are drawn by one game method, so they can only be hidden
+  together; `HEALTHMOUNT` is not published.
 - Forge-added Minecraft members are replaced one by one, see
   `alloy-forge/src/main/resources/META-INF/alloy/member-shims.tsv`.
 - Nothing a server can see is changed, and the agent does not hide itself.
+
+At every launch the log lists, per mod, what it needs that Alloy lacks: Mixin, a coremod or a
+tweaker, a Forge event that is never published, a Forge-added member that is not replaced.
 
 ## How it works
 
@@ -58,12 +66,15 @@ Alloy loader     Alloy's Forge runtime + Forge (remapped) + Forge mods (remapped
    mod to the game's names using Lunar's own mapping files, caches them in `~/.alloy/cache`, and
    starts its runtime in a child class loader.
 4. Hooks injected into Minecraft classes call `GameHooks`, which posts the matching Forge event.
+5. Mods with mixins: the Mixin library rewrites each targeted game class as it is defined, and
+   Lunar's class loader is taught to find the mod classes that code refers to.
 
 | Module | Role |
 |---|---|
 | `alloy-bridge` | Contract between the game and the runtime (`GameHooks`, `GameEventSink`). No dependencies. |
 | `alloy-remap` | Reads Lunar's `.kin` mappings, remaps jars, applies Forge's load-time transforms. |
 | `alloy-hooks` | Class transformer: game-loader bridge and the hook catalog. |
+| `alloy-mixin` | Runs the Mixin library for the mods (its own class loader, apart from Lunar's copy). |
 | `alloy-agent` | `-javaagent` entry point, config, log, Weave, cache, mod class loader. |
 | `alloy-forge` | Runs inside the game: mod lifecycle and Forge events. |
 | `alloy-devtools` | Command-line tool (`setup-workspace`). |
@@ -83,4 +94,5 @@ Some tests need files from a local Lunar install and skip themselves when those 
 ## License
 
 GPL-3.0, like Weave, whose class-loader technique Alloy ports. Forge and Minecraft are never copied
-or redistributed.
+or redistributed. The agent jar embeds SpongePowered Mixin (MIT), ASM (BSD-3-Clause), Guava and
+Gson (Apache-2.0).

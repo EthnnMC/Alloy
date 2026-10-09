@@ -71,6 +71,20 @@ public final class WorkingJar {
     }
 
     /**
+     * Returns the non-class entries as an unmodifiable view: entry name to bytes.
+     */
+    public Map<String, byte[]> resources() {
+        return Collections.unmodifiableMap(this.resources);
+    }
+
+    /**
+     * Adds a resource to the jar, replacing an entry of the same name.
+     */
+    public void putResource(String entryName, byte[] content) {
+        this.resources.put(entryName, content);
+    }
+
+    /**
      * Applies a pass to each class, in alphabetical name order, removing those the pass drops.
      */
     public void apply(ClassPass pass) {

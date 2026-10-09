@@ -6,26 +6,33 @@ import dev.alloy.remap.hierarchy.ClassHierarchy;
 import dev.alloy.remap.hierarchy.HeaderTable;
 import dev.alloy.remap.hierarchy.LayeredHeaderSource;
 import dev.alloy.remap.io.Sha256;
+import dev.alloy.remap.jar.LoaderRequirements;
 import dev.alloy.remap.jar.OverlayFilter;
 import dev.alloy.remap.jar.SourceJar;
 import dev.alloy.remap.jar.WorkingJar;
 import dev.alloy.remap.mapping.LunarMappingsJar;
 import dev.alloy.remap.mapping.NotchRemapper;
 import dev.alloy.remap.mapping.SrgRemapper;
+import dev.alloy.remap.mixin.MixinIndex;
 import dev.alloy.remap.transform.AccessWideningPass;
+import dev.alloy.remap.transform.ClassPass;
 import dev.alloy.remap.transform.ClassPipeline;
 import dev.alloy.remap.transform.EventClassPass;
 import dev.alloy.remap.transform.MemberShimPass;
+import dev.alloy.remap.transform.MissingMemberPass;
 import dev.alloy.remap.transform.ModClassCollector;
 import dev.alloy.remap.transform.SidePass;
 import dev.alloy.remap.transform.SrgStringPass;
 import dev.alloy.remap.transform.SubscriberPass;
+import dev.alloy.remap.transform.UnfiredEventPass;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -47,7 +54,7 @@ public final class RemapToolkit {
      * Version of the rewriting logic. Increase it whenever a change in this module alters the
      * produced jars: it is part of {@link #fingerprint()}, so old cached jars are rebuilt.
      */
-    public static final int TRANSFORM_VERSION = 1;
+    public static final int TRANSFORM_VERSION = 4;
 
     /** Hexadecimal digits kept for the fingerprint: enough for a cache key. */
     private static final int FINGERPRINT_LENGTH = 32;
@@ -142,8 +149,9 @@ public final class RemapToolkit {
 
     /**
      * Prepares a Forge mod: translates its SRG names to game names (also in reflection strings),
-     * applies the transformations Forge does at load time, and replaces accesses to members Forge
-     * adds to Minecraft.
+     * applies the transformations Forge does at load time, translates what its mixins keep as text
+     * (their configuration files and targets are listed in the jar entry {@link MixinIndex#JAR_ENTRY}),
+     * and replaces accesses to members Forge adds to Minecraft.
      *
      * <p>Recognizing mod events requires knowing the Forge classes: call {@link #prepareForge} or
      * {@link #useForgeJar} first, otherwise a warning is added for each doubtful mod class.</p>
@@ -154,11 +162,22 @@ public final class RemapToolkit {
      * @return the produced jar, its {@code @Mod} classes and the warnings
      * @throws IOException if an input file is unreadable or writing fails
      */
-    public synchronized PreparedModJar prepareMod(Path modJar, Path outputJar, MemberShimTable shims)
-            throws IOException {
+    public PreparedModJar prepareMod(Path modJar, Path outputJar, MemberShimTable shims) throws IOException {
+        return this.prepareMod(modJar, outputJar, shims, Set.of());
+    }
+
+    /**
+     * Same as {@link #prepareMod(Path, Path, MemberShimTable)}, and also warns about each Forge
+     * event the mod listens to that Alloy never publishes.
+     *
+     * @param firedEvents internal names of the Forge event classes Alloy publishes; empty to skip the check
+     */
+    public synchronized PreparedModJar prepareMod(
+            Path modJar, Path outputJar, MemberShimTable shims, Set<String> firedEvents) throws IOException {
         List<String> warnings = new ArrayList<>();
         SrgNameTable names = this.mappings.srgNames();
         SourceJar source = SourceJar.read(modJar, warnings::add);
+        LoaderRequirements.report(source.resources(), warnings::add);
         WorkingJar work = source.remap(new SrgRemapper(names), warnings::add);
 
         HeaderTable modHeaders = work.headers();
@@ -169,18 +188,35 @@ public final class RemapToolkit {
         ClassHierarchy everything = new ClassHierarchy(new LayeredHeaderSource(List.of(modHeaders, forge, minecraft)));
 
         ModClassCollector modClasses = new ModClassCollector();
-        ClassPipeline pipeline = new ClassPipeline(List.of(
+        MixinIndex mixins = new MixinIndex(names);
+        List<ClassPass> passes = new ArrayList<>(List.of(
                 new SrgStringPass(names),
                 new SidePass(warnings::add),
+                mixins,
                 new EventClassPass(modAndForge, warnings::add),
                 new SubscriberPass(warnings::add),
                 new MemberShimPass(shims, everything),
+                new MissingMemberPass(everything, warnings::add),
                 modClasses));
+        if (!firedEvents.isEmpty()) {
+            passes.add(new UnfiredEventPass(firedEvents, modAndForge, warnings::add));
+        }
+        ClassPipeline pipeline = new ClassPipeline(passes);
         try {
             work.apply(pipeline);
         } catch (UncheckedIOException e) {
             // Thrown by namedVanillaHeader: give the caller back the original checked exception.
             throw e.getCause();
+        }
+        for (Map.Entry<String, byte[]> resource : List.copyOf(work.resources().entrySet())) {
+            if (MixinIndex.isReferenceMap(resource.getKey())) {
+                work.putResource(resource.getKey(), mixins.translateNames(resource.getValue()));
+            }
+        }
+        MixinIndex.Contents mixinContents =
+                new MixinIndex.Contents(MixinIndex.configNames(source.resources()), mixins.targets());
+        if (!mixinContents.isEmpty()) {
+            work.putResource(MixinIndex.JAR_ENTRY, mixinContents.format().getBytes(StandardCharsets.UTF_8));
         }
         work.writeTo(outputJar);
         return new PreparedModJar(outputJar, modClasses.modClassNames(), warnings);

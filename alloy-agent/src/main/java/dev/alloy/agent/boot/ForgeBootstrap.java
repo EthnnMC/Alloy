@@ -10,6 +10,7 @@ import dev.alloy.agent.forge.RuntimeJar;
 import dev.alloy.agent.launch.GameFiles;
 import dev.alloy.agent.launch.LaunchInfo;
 import dev.alloy.agent.loader.AlloyClassLoader;
+import dev.alloy.agent.loader.GameClassSource;
 import dev.alloy.bridge.BridgeLogger;
 import dev.alloy.bridge.GameEventSink;
 import dev.alloy.bridge.GameHooks;
@@ -21,11 +22,13 @@ import dev.alloy.remap.PreparedModJar;
 import dev.alloy.remap.RemapToolkit;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -112,7 +115,9 @@ public final class ForgeBootstrap implements GameStartListener {
         Path forgeJar = this.prepareForge(toolkit, cache, runtime.overlaidClasses());
         List<PreparedMod> mods = this.prepareMods(toolkit, cache, runtime, version);
 
-        ClassLoader modLoader = new AlloyClassLoader(ForgeBootstrap.classPath(runtime.jar(), forgeJar, mods), gameLoader);
+        AlloyClassLoader modLoader = new AlloyClassLoader(ForgeBootstrap.classPath(runtime.jar(), forgeJar, mods), gameLoader);
+        // Before anything of the mods runs: their mixins only reach classes the game has not loaded yet.
+        this.startMixins(mods, modLoader, gameLoader);
         RuntimeContext context = new RuntimeContext(
                 version, gameDirectory, this.home.root(), forgeJar, mods, this.config.asMap(), this.logger);
         GameEventSink sink = ForgeBootstrap.startRuntime(modLoader, context);
@@ -121,6 +126,29 @@ public final class ForgeBootstrap implements GameStartListener {
         this.transformer.enableGameHooks();
         this.retransformLoadedGameClasses(gameLoader);
         return mods.size();
+    }
+
+    /**
+     * Lets game code reach the mods' classes, then starts their mixins. A failure is logged and
+     * the mods are loaded without their mixins.
+     */
+    private void startMixins(List<PreparedMod> mods, AlloyClassLoader modLoader, ClassLoader gameLoader) {
+        try {
+            // ClassLoader.defineClass is protected, in a package Java keeps closed: an agent may open it for itself.
+            this.instrumentation.redefineModule(ClassLoader.class.getModule(), Set.of(), Map.of(),
+                    Map.of("java.lang", Set.of(ForgeBootstrap.class.getModule())), Set.of(), Map.of());
+            Method defineClass = ClassLoader.class.getDeclaredMethod(
+                    "defineClass", String.class, byte[].class, int.class, int.class);
+            defineClass.setAccessible(true);
+
+            GameClassSource classSource = new GameClassSource(modLoader, gameLoader, defineClass, this.logger);
+            gameLoader.getClass().getField(GameHooks.CLASS_SOURCE_FIELD).set(null, classSource);
+            new MixinSupport(this.home, this.logger, this.launch, this.instrumentation, this.transformer)
+                    .start(mods, modLoader, gameLoader, classSource);
+        } catch (Throwable error) {
+            // Throwable: the Mixin host is loaded by reflection and may fail to link.
+            this.logger.error("Mixins could not be started: the mods are loaded without them", error);
+        }
     }
 
     /** Checks that the game loader finds the agent's own {@code GameHooks} class, not a copy. */
@@ -164,17 +192,24 @@ public final class ForgeBootstrap implements GameStartListener {
         Path cachedJar = cache.locationFor(ForgeBootstrap.MODS_CACHE_GROUP, modJar);
         Optional<List<String>> knownModClasses = cache.readModClasses(cachedJar);
         if (knownModClasses.isPresent()) {
+            this.logWarnings(modJar, cache.readWarnings(cachedJar));
             return new PreparedMod(modJar, cachedJar, knownModClasses.get());
         }
         this.logger.info("Preparing mod " + modJar.getFileName() + "...");
         Files.createDirectories(cachedJar.getParent());
-        PreparedModJar result = toolkit.prepareMod(modJar, cachedJar, runtime.shims());
-        result.warnings().forEach(warning -> this.logger.warn(modJar.getFileName() + ": " + warning));
+        PreparedModJar result = toolkit.prepareMod(modJar, cachedJar, runtime.shims(), runtime.firedEvents());
+        this.logWarnings(modJar, result.warnings());
         if (result.modClassNames().isEmpty()) {
-            this.logger.warn(modJar.getFileName() + " has no @Mod class: it is only added to the class path");
+            this.logger.info(modJar.getFileName() + " has no @Mod class: only its mixins, if any, are used");
         }
+        cache.writeWarnings(cachedJar, result.warnings());
         cache.writeModClasses(cachedJar, result.modClassNames());
         return new PreparedMod(modJar, cachedJar, result.modClassNames());
+    }
+
+    /** What may not work in a mod; logged at every launch, not only when the mod is first prepared. */
+    private void logWarnings(Path modJar, List<String> warnings) {
+        warnings.forEach(warning -> this.logger.warn(modJar.getFileName() + ": " + warning));
     }
 
     /** Order matters: runtime first (its classes replace Forge's), then Forge, then the mods. */

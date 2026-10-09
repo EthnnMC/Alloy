@@ -1,6 +1,7 @@
 package dev.alloy.hooks;
 
 import dev.alloy.bridge.BridgeLogger;
+import dev.alloy.bridge.ClassRewriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
@@ -50,6 +51,21 @@ public final class GameClassTransformer implements ClassFileTransformer {
     /** True once the Forge runtime can receive game events. */
     private volatile boolean gameHooksEnabled;
 
+    /** Rewrites the game classes the mods' mixins target; {@code null} until {@link #useModRewriter}. */
+    private volatile ClassRewriter modRewriter;
+
+    /** Internal names of the classes to give to {@link #modRewriter}. */
+    private volatile Set<String> modTargets = Set.of();
+
+    /**
+     * Classes as the mixins left them, by internal name. A retransformation starts again from the
+     * game's bytes and must end with the same members, so the first result is reused.
+     */
+    private final ConcurrentHashMap<String, byte[]> mixedClasses = new ConcurrentHashMap<>();
+
+    /** {@code Main} as the game defined it, kept to recognise Lunar's class cache; {@code null} until seen. */
+    private volatile byte[] mainClassBytes;
+
     /**
      * Creates the transformer; it must still be registered with
      * {@code Instrumentation.addTransformer(transformer, true)}.
@@ -77,7 +93,7 @@ public final class GameClassTransformer implements ClassFileTransformer {
             ProtectionDomain protectionDomain,
             byte[] classfileBuffer) {
         try {
-            return this.transformOrNull(loader, className, classfileBuffer);
+            return this.transformOrNull(loader, className, classBeingRedefined != null, classfileBuffer);
         } catch (Throwable error) {
             this.logFailure(className, error);
             return null;
@@ -99,6 +115,23 @@ public final class GameClassTransformer implements ClassFileTransformer {
         } catch (RuntimeException error) {
             this.logger.error("Transformer warm-up failed", error);
         }
+    }
+
+    /**
+     * Installs the rewriter that applies the mods' mixins. Unlike hooks, mixins add members, so
+     * they only reach classes defined after this call.
+     *
+     * @param rewriter the Mixin host
+     * @param targets  internal names of the game classes the mixins target
+     */
+    public void useModRewriter(ClassRewriter rewriter, Set<String> targets) {
+        this.modTargets = Set.copyOf(targets);
+        this.modRewriter = Objects.requireNonNull(rewriter, "rewriter");
+    }
+
+    /** Returns the game main class exactly as the game defined it, or empty before the game starts. */
+    public Optional<byte[]> gameMainClassBytes() {
+        return Optional.ofNullable(this.mainClassBytes);
     }
 
     /**
@@ -135,7 +168,7 @@ public final class GameClassTransformer implements ClassFileTransformer {
         return this.report;
     }
 
-    private byte[] transformOrNull(ClassLoader loader, String className, byte[] classBytes) {
+    private byte[] transformOrNull(ClassLoader loader, String className, boolean retransformed, byte[] classBytes) {
         if (loader == null || className == null || classBytes == null) {
             return null;
         }
@@ -143,14 +176,28 @@ public final class GameClassTransformer implements ClassFileTransformer {
             return this.installLoaderBridge(loader, className, classBytes);
         }
         List<Hook> hooks = this.catalog.hooksFor(className);
-        if (hooks.isEmpty() || !this.isGameLoader(loader, className)) {
+        boolean mixinTarget = this.modTargets.contains(className);
+        if (hooks.isEmpty() && !mixinTarget && !this.mixedClasses.containsKey(className)
+                || !this.isGameLoader(loader, className)) {
             return null;
         }
+        if (GameClasses.MAIN.equals(className) && this.mainClassBytes == null) {
+            this.mainClassBytes = classBytes.clone();
+        }
+        // Mixins first: the hooks must also find their place in what the mods changed.
+        byte[] mixed = this.mixedClasses.get(className);
+        if (mixed == null && mixinTarget && !retransformed) {
+            mixed = this.modRewriter.rewrite(className.replace('/', '.'), classBytes);
+            if (mixed != null) {
+                this.mixedClasses.put(className, mixed);
+            }
+        }
+        byte[] current = mixed == null ? classBytes : mixed;
         List<Hook> activeHooks = this.activeAmong(hooks);
         if (activeHooks.isEmpty()) {
-            return null;
+            return mixed;
         }
-        return this.patcher.patch(classBytes, activeHooks, this.report).orElse(null);
+        return this.patcher.patch(current, activeHooks, this.report).orElse(mixed);
     }
 
     private byte[] installLoaderBridge(ClassLoader definingLoader, String className, byte[] classBytes) {

@@ -2,6 +2,7 @@ package dev.alloy.agent.loader;
 
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -20,7 +21,19 @@ public final class AlloyClassLoader extends URLClassLoader {
         ClassLoader.registerAsParallelCapable();
     }
 
+    private static final String MIXIN_PACKAGE = "org.spongepowered.asm.";
+
+    /**
+     * Mixin classes that code merged into the game uses at run time. Game code and mod code must
+     * agree on them, so they always come from the game, never from the Mixin host.
+     */
+    private static final List<String> MIXIN_RUNTIME_PACKAGES = List.of(
+            "org.spongepowered.asm.mixin.injection.callback.", "org.spongepowered.asm.mixin.injection.invoke.arg.");
+
     private final ConcurrentHashMap<String, Boolean> providedByGame = new ConcurrentHashMap<>();
+
+    /** The Mixin host's loader; {@code null} when no mod has mixins. */
+    private volatile MixinHostLoader mixinLibrary;
 
     /**
      * Creates the loader.
@@ -37,13 +50,38 @@ public final class AlloyClassLoader extends URLClassLoader {
         synchronized (this.getClassLoadingLock(name)) {
             Class<?> loaded = this.findLoadedClass(name);
             if (loaded == null) {
-                loaded = this.definesItself(name) ? this.findClass(name) : super.loadClass(name, false);
+                if (this.comesFromMixinLibrary(name)) {
+                    loaded = this.mixinLibrary.loadClass(name);
+                } else {
+                    loaded = this.definesItself(name) ? this.findClass(name) : super.loadClass(name, false);
+                }
             }
             if (resolve) {
                 this.resolveClass(loaded);
             }
             return loaded;
         }
+    }
+
+    /**
+     * Makes the mods use the Mixin library of the Mixin host. A mixin plugin written by a mod
+     * implements Mixin's interfaces: they must be the host's, not those of the game's own copy.
+     */
+    public void useMixinLibrary(MixinHostLoader library) {
+        this.mixinLibrary = library;
+    }
+
+    private boolean comesFromMixinLibrary(String name) {
+        MixinHostLoader library = this.mixinLibrary;
+        if (library == null || !name.startsWith(AlloyClassLoader.MIXIN_PACKAGE)) {
+            return false;
+        }
+        for (String runtimePackage : AlloyClassLoader.MIXIN_RUNTIME_PACKAGES) {
+            if (name.startsWith(runtimePackage)) {
+                return false;
+            }
+        }
+        return library.has(name);
     }
 
     /**

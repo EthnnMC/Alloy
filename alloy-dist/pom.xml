@@ -27,17 +27,23 @@
       <artifactId>alloy-forge</artifactId>
       <scope>provided</scope>
     </dependency>
+    <dependency>
+      <groupId>dev.alloy</groupId>
+      <artifactId>alloy-mixin</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 
   <build>
     <plugins>
-      <!-- 1. Copy the Forge runtime jar into the resources under the name the agent expects. -->
+      <!-- 1. Copy the Forge runtime and the Mixin host into the resources under the names the agent expects. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
         <executions>
           <execution>
-            <id>embed-forge-runtime</id>
+            <id>embed-runtime-jars</id>
             <phase>prepare-package</phase>
             <goals>
               <goal>copy</goal>
@@ -50,6 +56,13 @@
                   <version>${project.version}</version>
                   <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                   <destFileName>alloy-forge-runtime.jar</destFileName>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>dev.alloy</groupId>
+                  <artifactId>alloy-mixin</artifactId>
+                  <version>${project.version}</version>
+                  <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                  <destFileName>alloy-mixin-host.jar</destFileName>
                 </artifactItem>
               </artifactItems>
             </configuration>

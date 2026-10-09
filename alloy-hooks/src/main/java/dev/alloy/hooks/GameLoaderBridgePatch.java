@@ -7,6 +7,9 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
@@ -14,6 +17,7 @@ import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 /**
@@ -26,6 +30,10 @@ import org.objectweb.asm.tree.VarInsnNode;
  * <pre>
  *   if (name.startsWith("dev.alloy.bridge.")) {
  *       return ClassLoader.getSystemClassLoader().loadClass(name);
+ *   }
+ *   Class found = alloy$findInClassSource(name);   // the mods' classes, see newClassSourceLookup()
+ *   if (found != null) {
+ *       return found;
  *   }
  * </pre>
  *
@@ -47,6 +55,12 @@ final class GameLoaderBridgePatch {
     private static final String LOAD_CLASS = "loadClass";
     private static final String LOAD_CLASS_WITH_RESOLVE_DESCRIPTOR = "(Ljava/lang/String;Z)Ljava/lang/Class;";
     private static final String LOAD_CLASS_DESCRIPTOR = "(Ljava/lang/String;)Ljava/lang/Class;";
+
+    /** Name of the method added to the loader; see {@link #newClassSourceLookup()}. */
+    private static final String FIND_IN_SOURCE = "alloy$findInClassSource";
+    private static final String OBJECT = "java/lang/Object";
+    private static final String FUNCTION = "java/util/function/Function";
+    private static final String FUNCTION_DESCRIPTOR = "Ljava/util/function/Function;";
 
     /** Local variable holding the first parameter, {@code name}; slot 0 is {@code this}. */
     private static final int NAME_SLOT = 1;
@@ -79,7 +93,11 @@ final class GameLoaderBridgePatch {
             return Optional.empty();
         }
         TargetMethod method = new TargetMethod(classNode.name, classNode.version, loadClass.get());
-        method.instructions().insert(GameLoaderBridgePatch.newPrelude(method));
+        method.instructions().insert(GameLoaderBridgePatch.newPrelude(method, classNode.name, loadClass.get().maxLocals));
+        classNode.fields.add(new FieldNode(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_VOLATILE | Opcodes.ACC_SYNTHETIC,
+                GameHooks.CLASS_SOURCE_FIELD, GameLoaderBridgePatch.FUNCTION_DESCRIPTOR, null, null));
+        classNode.methods.add(GameLoaderBridgePatch.newClassSourceLookup(classNode.name));
 
         ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
         classNode.accept(writer);
@@ -103,8 +121,9 @@ final class GameLoaderBridgePatch {
      * ({@code this}, {@code name}, {@code resolve}, empty stack), added by
      * {@link TargetMethod#appendResumePoint}.
      */
-    private static InsnList newPrelude(TargetMethod method) {
+    private static InsnList newPrelude(TargetMethod method, String loaderName, int freeSlot) {
         LabelNode notBridged = new LabelNode();
+        LabelNode notInSource = new LabelNode();
         InsnList code = new InsnList();
         // if (!name.startsWith("dev.alloy.bridge.")) goto notBridged;
         code.add(new VarInsnNode(Opcodes.ALOAD, GameLoaderBridgePatch.NAME_SLOT));
@@ -120,8 +139,60 @@ final class GameLoaderBridgePatch {
                 GameLoaderBridgePatch.CLASS_LOADER, GameLoaderBridgePatch.LOAD_CLASS,
                 GameLoaderBridgePatch.LOAD_CLASS_DESCRIPTOR, false));
         code.add(new InsnNode(Opcodes.ARETURN));
-        // notBridged: the original code resumes here.
-        method.appendResumePoint(code, notBridged, true);
+        // notBridged: Class found = alloy$findInClassSource(name); if (found != null) return found;
+        method.appendResumePoint(code, notBridged, false);
+        code.add(new VarInsnNode(Opcodes.ALOAD, GameLoaderBridgePatch.NAME_SLOT));
+        code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, loaderName,
+                GameLoaderBridgePatch.FIND_IN_SOURCE, GameLoaderBridgePatch.LOAD_CLASS_DESCRIPTOR, false));
+        // The result lives in a variable the original code never uses, so both resume points keep
+        // the method-entry frame.
+        code.add(new VarInsnNode(Opcodes.ASTORE, freeSlot));
+        code.add(new VarInsnNode(Opcodes.ALOAD, freeSlot));
+        code.add(new JumpInsnNode(Opcodes.IFNULL, notInSource));
+        code.add(new VarInsnNode(Opcodes.ALOAD, freeSlot));
+        code.add(new InsnNode(Opcodes.ARETURN));
+        // notInSource: the original code resumes here.
+        method.appendResumePoint(code, notInSource, true);
         return code;
+    }
+
+    /**
+     * Builds the method that asks the agent for a class the game does not have (a mod's class
+     * reached from code a mixin put in the game). The agent stores a {@code Function} in a static
+     * field added to the loader; only JDK types are used, as in the detour.
+     *
+     * <pre>
+     *   public static volatile Function alloy$classSource;
+     *
+     *   private static Class alloy$findInClassSource(String name) {
+     *       Function source = alloy$classSource;
+     *       if (source == null) { return null; }
+     *       return (Class) source.apply(name);
+     *   }
+     * </pre>
+     */
+    private static MethodNode newClassSourceLookup(String loaderName) {
+        MethodNode lookup = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                GameLoaderBridgePatch.FIND_IN_SOURCE, GameLoaderBridgePatch.LOAD_CLASS_DESCRIPTOR, null, null);
+        LabelNode hasSource = new LabelNode();
+        InsnList code = lookup.instructions;
+        code.add(new FieldInsnNode(Opcodes.GETSTATIC, loaderName,
+                GameHooks.CLASS_SOURCE_FIELD, GameLoaderBridgePatch.FUNCTION_DESCRIPTOR));
+        code.add(new VarInsnNode(Opcodes.ASTORE, 1));
+        code.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        code.add(new JumpInsnNode(Opcodes.IFNONNULL, hasSource));
+        code.add(new InsnNode(Opcodes.ACONST_NULL));
+        code.add(new InsnNode(Opcodes.ARETURN));
+        code.add(hasSource);
+        // Frame of the jump target: the parameter and the source, empty stack.
+        code.add(new FrameNode(Opcodes.F_NEW, 2,
+                new Object[] {GameLoaderBridgePatch.STRING, GameLoaderBridgePatch.FUNCTION}, 0, new Object[0]));
+        code.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        code.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        code.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, GameLoaderBridgePatch.FUNCTION, "apply",
+                "(L" + GameLoaderBridgePatch.OBJECT + ";)L" + GameLoaderBridgePatch.OBJECT + ";", true));
+        code.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Class"));
+        code.add(new InsnNode(Opcodes.ARETURN));
+        return lookup;
     }
 }
