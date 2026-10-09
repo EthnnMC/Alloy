@@ -1,7 +1,14 @@
 @echo off
 rem Installs the agent into %USERPROFILE%\.alloy and prints the JVM argument for Lunar Client.
+rem Waits for a key before closing, so a double-clicked window can be read; set ALLOY_NO_PAUSE to skip.
 setlocal
 cd /d "%~dp0.."
+call :main
+set "RESULT=%errorlevel%"
+if not defined ALLOY_NO_PAUSE pause
+exit /b %RESULT%
+
+:main
 set "ALLOY_HOME=%USERPROFILE%\.alloy"
 rem A space in the path would cut the JVM argument in two: install at the root of the drive instead.
 if not "%USERPROFILE%"=="%USERPROFILE: =%" set "ALLOY_HOME=%SystemDrive%\.alloy"
@@ -23,3 +30,4 @@ echo Put Forge 1.8.9 mods in: %ALLOY_HOME%\mods
 echo.
 echo Lunar Client launcher, profile 1.8, advanced settings, JVM Arguments:
 echo   -javaagent:%ALLOY_HOME%\agents\Alloy-Agent.jar
+exit /b 0

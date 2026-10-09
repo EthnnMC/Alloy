@@ -1,0 +1,20 @@
+Third-party components inside Alloy-Agent.jar
+=============================================
+
+SpongePowered Mixin 0.8.5        MIT License             licenses\Mixin-MIT.txt
+  https://github.com/SpongePowered/Mixin
+
+ASM 9.7.1                        BSD 3-Clause License    licenses\ASM-BSD-3-Clause.txt
+  https://asm.ow2.io
+
+Guava 21.0                       Apache License 2.0      licenses\Apache-2.0.txt
+  https://github.com/google/guava
+
+Gson 2.2.4                       Apache License 2.0      licenses\Apache-2.0.txt
+  https://github.com/google/gson
+
+Alloy's way of reaching Lunar Client's class loader is ported from Weave Loader (GPL-3.0),
+https://github.com/Weave-MC/Weave-Loader.
+
+Not included: Minecraft and Minecraft Forge. Alloy downloads the official Forge jar on the user's
+machine and never redistributes it.
