@@ -12,14 +12,15 @@ import java.util.Optional;
 
 /**
  * Cache of rewritten jars ({@code ~/.alloy/cache}). Each jar name contains a key computed from
- * everything its content depends on, so a change simply produces a new jar. Next to a mod jar, a
- * small text file remembers the {@code @Mod} classes found while rewriting.
+ * everything its content depends on, so a change simply produces a new jar. Next to a mod jar, two
+ * small text files remember the {@code @Mod} classes and the warnings found while rewriting.
  */
 public final class JarCache {
 
     private static final int KEY_LENGTH = 16;
     private static final String JAR_SUFFIX = ".jar";
     private static final String MOD_CLASSES_SUFFIX = ".modclasses";
+    private static final String WARNINGS_SUFFIX = ".warnings";
 
     private final Path directory;
     private final String environmentKey;
@@ -59,13 +60,22 @@ public final class JarCache {
      * @throws IOException if the note exists but cannot be read
      */
     public Optional<List<String>> readModClasses(Path cachedJar) throws IOException {
-        Path note = JarCache.noteOf(cachedJar);
+        Path note = JarCache.noteOf(cachedJar, JarCache.MOD_CLASSES_SUFFIX);
         if (!Files.isRegularFile(cachedJar) || !Files.isRegularFile(note)) {
             return Optional.empty();
         }
-        return Optional.of(Files.readAllLines(note, StandardCharsets.UTF_8).stream()
-                .filter(line -> !line.isBlank())
-                .toList());
+        return Optional.of(JarCache.readLines(note));
+    }
+
+    /**
+     * Reads back the warnings noted next to a cached mod jar, so they are logged at every launch.
+     *
+     * @return the warnings; empty if there were none
+     * @throws IOException if the note exists but cannot be read
+     */
+    public List<String> readWarnings(Path cachedJar) throws IOException {
+        Path note = JarCache.noteOf(cachedJar, JarCache.WARNINGS_SUFFIX);
+        return Files.isRegularFile(note) ? JarCache.readLines(note) : List.of();
     }
 
     /**
@@ -76,14 +86,33 @@ public final class JarCache {
      * @throws IOException if writing fails
      */
     public void writeModClasses(Path cachedJar, List<String> modClassNames) throws IOException {
-        Path note = JarCache.noteOf(cachedJar);
-        Path temporary = Files.createTempFile(note.getParent(), "modclasses", ".tmp");
-        Files.write(temporary, modClassNames, StandardCharsets.UTF_8);
+        JarCache.writeNote(JarCache.noteOf(cachedJar, JarCache.MOD_CLASSES_SUFFIX), modClassNames);
+    }
+
+    /**
+     * Notes the warnings of a mod jar; call it before {@link #writeModClasses}, whose note marks the
+     * cache entry as complete.
+     *
+     * @throws IOException if writing fails
+     */
+    public void writeWarnings(Path cachedJar, List<String> warnings) throws IOException {
+        JarCache.writeNote(JarCache.noteOf(cachedJar, JarCache.WARNINGS_SUFFIX), warnings);
+    }
+
+    private static List<String> readLines(Path note) throws IOException {
+        return Files.readAllLines(note, StandardCharsets.UTF_8).stream()
+                .filter(line -> !line.isBlank())
+                .toList();
+    }
+
+    private static void writeNote(Path note, List<String> lines) throws IOException {
+        Path temporary = Files.createTempFile(note.getParent(), "note", ".tmp");
+        Files.write(temporary, lines, StandardCharsets.UTF_8);
         // The note appears only once complete: an interrupted launch leaves no half-written cache.
         Files.move(temporary, note, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    private static Path noteOf(Path cachedJar) {
-        return cachedJar.resolveSibling(cachedJar.getFileName() + JarCache.MOD_CLASSES_SUFFIX);
+    private static Path noteOf(Path cachedJar, String suffix) {
+        return cachedJar.resolveSibling(cachedJar.getFileName() + suffix);
     }
 }

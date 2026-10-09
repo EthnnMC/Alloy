@@ -13,14 +13,17 @@ import java.util.Set;
  * @param contentHash     hash of its content; part of the cache keys, since a different runtime changes the jars to produce
  * @param overlaidClasses internal names of the Forge classes this runtime replaces with its own
  * @param shims           replacements for the members Forge adds to Minecraft
+ * @param firedEvents     internal names of the Forge event classes this runtime publishes
  */
-public record RuntimeJar(Path jar, String contentHash, Set<String> overlaidClasses, MemberShimTable shims) {
+public record RuntimeJar(
+        Path jar, String contentHash, Set<String> overlaidClasses, MemberShimTable shims, Set<String> firedEvents) {
 
-    /** Rejects {@code null} and copies the set. */
+    /** Rejects {@code null} and copies the sets. */
     public RuntimeJar {
         Objects.requireNonNull(jar, "jar");
         Objects.requireNonNull(contentHash, "contentHash");
         Objects.requireNonNull(shims, "shims");
         overlaidClasses = Set.copyOf(overlaidClasses);
+        firedEvents = Set.copyOf(firedEvents);
     }
 }

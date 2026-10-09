@@ -4,6 +4,7 @@ import dev.alloy.remap.MemberShimTable;
 import dev.alloy.remap.io.Sha256;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -26,6 +27,11 @@ public final class EmbeddedRuntime {
 
     /** Runtime entry that lists the Forge-added members to replace. */
     public static final String SHIM_TABLE_ENTRY = "META-INF/alloy/member-shims.tsv";
+
+    /** Runtime entry that lists the Forge events the runtime publishes. */
+    public static final String FIRED_EVENTS_ENTRY = "META-INF/alloy/fired-events.txt";
+
+    private static final String COMMENT_PREFIX = "#";
 
     private static final String FORGE_PACKAGE = "net/minecraftforge/";
     private static final String CLASS_SUFFIX = ".class";
@@ -92,7 +98,24 @@ public final class EmbeddedRuntime {
                     shims = MemberShimTable.read(input);
                 }
             }
+            return new RuntimeJar(jar, hash, overlaidClasses, shims, EmbeddedRuntime.firedEvents(file));
         }
-        return new RuntimeJar(jar, hash, overlaidClasses, shims);
+    }
+
+    private static Set<String> firedEvents(JarFile file) throws IOException {
+        JarEntry list = file.getJarEntry(EmbeddedRuntime.FIRED_EVENTS_ENTRY);
+        if (list == null) {
+            return Set.of();
+        }
+        Set<String> events = new LinkedHashSet<>();
+        try (InputStream input = file.getInputStream(list)) {
+            for (String line : new String(input.readAllBytes(), StandardCharsets.UTF_8).split("\\R")) {
+                String name = line.strip();
+                if (!name.isEmpty() && !name.startsWith(EmbeddedRuntime.COMMENT_PREFIX)) {
+                    events.add(name);
+                }
+            }
+        }
+        return events;
     }
 }

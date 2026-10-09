@@ -1,0 +1,76 @@
+# Forge events this runtime publishes, one internal class name per line.
+# The agent warns when a mod listens to a Forge event that is neither listed here nor a parent of
+# a listed one. Keep it in sync with dev.alloy.forge.event and OptiFineBridge.
+
+# Ticks and input
+net/minecraftforge/fml/common/gameevent/TickEvent$ClientTickEvent
+net/minecraftforge/fml/common/gameevent/TickEvent$RenderTickEvent
+net/minecraftforge/fml/common/gameevent/TickEvent$PlayerTickEvent
+net/minecraftforge/fml/common/gameevent/InputEvent$KeyInputEvent
+net/minecraftforge/fml/common/gameevent/InputEvent$MouseInputEvent
+net/minecraftforge/client/event/MouseEvent
+
+# Screens
+net/minecraftforge/client/event/GuiOpenEvent
+net/minecraftforge/client/event/GuiScreenEvent$InitGuiEvent$Pre
+net/minecraftforge/client/event/GuiScreenEvent$InitGuiEvent$Post
+net/minecraftforge/client/event/GuiScreenEvent$DrawScreenEvent$Pre
+net/minecraftforge/client/event/GuiScreenEvent$DrawScreenEvent$Post
+net/minecraftforge/client/event/GuiScreenEvent$ActionPerformedEvent$Pre
+net/minecraftforge/client/event/GuiScreenEvent$ActionPerformedEvent$Post
+net/minecraftforge/client/event/GuiScreenEvent$MouseInputEvent$Pre
+net/minecraftforge/client/event/GuiScreenEvent$MouseInputEvent$Post
+net/minecraftforge/client/event/GuiScreenEvent$KeyboardInputEvent$Pre
+net/minecraftforge/client/event/GuiScreenEvent$KeyboardInputEvent$Post
+net/minecraftforge/client/event/GuiScreenEvent$BackgroundDrawnEvent
+net/minecraftforge/fml/client/event/ConfigChangedEvent$OnConfigChangedEvent
+net/minecraftforge/fml/client/event/ConfigChangedEvent$PostConfigChangedEvent
+
+# Chat, commands and network
+net/minecraftforge/client/event/ClientChatReceivedEvent
+net/minecraftforge/event/CommandEvent
+net/minecraftforge/fml/common/network/FMLNetworkEvent$ClientConnectedToServerEvent
+net/minecraftforge/fml/common/network/FMLNetworkEvent$ClientDisconnectionFromServerEvent
+
+# World and entities
+net/minecraftforge/event/world/WorldEvent$Load
+net/minecraftforge/event/world/WorldEvent$Unload
+net/minecraftforge/event/world/ChunkEvent$Load
+net/minecraftforge/event/world/ChunkEvent$Unload
+net/minecraftforge/event/entity/EntityJoinWorldEvent
+net/minecraftforge/event/entity/EntityEvent$EntityConstructing
+net/minecraftforge/event/entity/PlaySoundAtEntityEvent
+net/minecraftforge/event/entity/living/LivingEvent$LivingUpdateEvent
+net/minecraftforge/event/entity/living/LivingEvent$LivingJumpEvent
+net/minecraftforge/event/entity/player/AttackEntityEvent
+net/minecraftforge/event/entity/player/EntityInteractEvent
+net/minecraftforge/event/entity/player/PlayerInteractEvent
+net/minecraftforge/event/entity/player/ItemTooltipEvent
+
+# Rendering and sound
+net/minecraftforge/client/event/RenderGameOverlayEvent$Pre
+net/minecraftforge/client/event/RenderGameOverlayEvent$Post
+net/minecraftforge/client/event/RenderGameOverlayEvent$Text
+net/minecraftforge/client/event/RenderGameOverlayEvent$Chat
+net/minecraftforge/client/event/RenderLivingEvent$Pre
+net/minecraftforge/client/event/RenderLivingEvent$Post
+net/minecraftforge/client/event/RenderLivingEvent$Specials$Pre
+net/minecraftforge/client/event/RenderLivingEvent$Specials$Post
+net/minecraftforge/client/event/RenderPlayerEvent$Pre
+net/minecraftforge/client/event/RenderPlayerEvent$Post
+net/minecraftforge/client/event/RenderWorldLastEvent
+net/minecraftforge/client/event/DrawBlockHighlightEvent
+net/minecraftforge/client/event/TextureStitchEvent$Pre
+net/minecraftforge/client/event/TextureStitchEvent$Post
+net/minecraftforge/client/event/FOVUpdateEvent
+net/minecraftforge/client/event/sound/PlaySoundEvent
+
+# Published by OptiFine once OptiFineBridge has connected it
+net/minecraftforge/client/event/EntityViewRenderEvent$FOVModifier
+net/minecraftforge/client/event/EntityViewRenderEvent$FogDensity
+net/minecraftforge/client/event/EntityViewRenderEvent$RenderFogEvent
+net/minecraftforge/client/event/EntityViewRenderEvent$FogColors
+net/minecraftforge/client/event/EntityViewRenderEvent$CameraSetup
+net/minecraftforge/client/event/RenderHandEvent
+net/minecraftforge/client/event/RenderBlockOverlayEvent
+net/minecraftforge/client/event/RenderItemInFrameEvent
